@@ -115,7 +115,12 @@ export class NFTMonitor {
 
       // Process each mint event
       for (const event of events) {
-        await this.processMintEvent(event);
+        // Type guard: ensure event is EventLog (not just Log)
+        if ('args' in event && event.args) {
+          await this.processMintEvent(event);
+        } else {
+          console.warn('[Monitor] Skipping non-EventLog event');
+        }
       }
 
       // Update last processed block
