@@ -3,10 +3,15 @@ import { MintEvent } from './types';
 import { Notifier } from './notifier';
 
 /**
- * ERC721 Transfer event ABI
+ * NFT event ABIs supporting both ERC721 and ERC1155
  */
-const TRANSFER_EVENT_ABI = [
-  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)'
+const NFT_EVENT_ABI = [
+  // ERC721 Transfer event
+  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
+  // ERC1155 TransferSingle event
+  'event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)',
+  // ERC1155 TransferBatch event
+  'event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)'
 ];
 
 /**
@@ -30,7 +35,7 @@ export class NFTMonitor {
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.contractAddress = contractAddress;
-    this.contract = new ethers.Contract(contractAddress, TRANSFER_EVENT_ABI, this.provider);
+    this.contract = new ethers.Contract(contractAddress, NFT_EVENT_ABI, this.provider);
     this.notifier = notifier;
     this.lastProcessedBlock = startBlock;
     this.pollInterval = pollInterval;
@@ -98,29 +103,87 @@ export class NFTMonitor {
 
       console.log(`[Monitor] Checking blocks ${this.lastProcessedBlock + 1} to ${currentBlock}`);
 
-      // Query Transfer events
-      const filter = this.contract.filters.Transfer(
-        ethers.ZeroAddress, // from address = 0x0 (mint only)
-        null, // to address = any
-        null  // tokenId = any
-      );
+      // Query both ERC721 and ERC1155 mint events
+      const allEvents: ethers.EventLog[] = [];
 
-      const events = await this.contract.queryFilter(
-        filter,
-        this.lastProcessedBlock + 1,
-        currentBlock
-      );
+      // ERC721 Transfer events (from = 0x0)
+      try {
+        const erc721Filter = this.contract.filters.Transfer(
+          ethers.ZeroAddress, // from address = 0x0 (mint only)
+          null, // to address = any
+          null  // tokenId = any
+        );
+        const erc721Events = await this.contract.queryFilter(
+          erc721Filter,
+          this.lastProcessedBlock + 1,
+          currentBlock
+        );
+        console.log(`[Monitor] Found ${erc721Events.length} ERC721 mint event(s)`);
 
-      console.log(`[Monitor] Found ${events.length} mint event(s)`);
+        for (const event of erc721Events) {
+          if ('args' in event && event.args) {
+            allEvents.push(event as ethers.EventLog);
+          }
+        }
+      } catch (error) {
+        console.log('[Monitor] No ERC721 events or error querying:', (error as Error).message);
+      }
+
+      // ERC1155 TransferSingle events (from = 0x0)
+      try {
+        const erc1155SingleFilter = this.contract.filters.TransferSingle(
+          null, // operator = any
+          ethers.ZeroAddress, // from = 0x0 (mint only)
+          null, // to = any
+          null, // id = any
+          null  // value = any
+        );
+        const erc1155SingleEvents = await this.contract.queryFilter(
+          erc1155SingleFilter,
+          this.lastProcessedBlock + 1,
+          currentBlock
+        );
+        console.log(`[Monitor] Found ${erc1155SingleEvents.length} ERC1155 TransferSingle mint event(s)`);
+
+        for (const event of erc1155SingleEvents) {
+          if ('args' in event && event.args) {
+            allEvents.push(event as ethers.EventLog);
+          }
+        }
+      } catch (error) {
+        console.log('[Monitor] No ERC1155 events or error querying:', (error as Error).message);
+      }
+
+      // ERC1155 TransferBatch events (from = 0x0)
+      try {
+        const erc1155BatchFilter = this.contract.filters.TransferBatch(
+          null, // operator = any
+          ethers.ZeroAddress, // from = 0x0 (mint only)
+          null, // to = any
+          null, // ids = any
+          null  // values = any
+        );
+        const erc1155BatchEvents = await this.contract.queryFilter(
+          erc1155BatchFilter,
+          this.lastProcessedBlock + 1,
+          currentBlock
+        );
+        console.log(`[Monitor] Found ${erc1155BatchEvents.length} ERC1155 TransferBatch mint event(s)`);
+
+        for (const event of erc1155BatchEvents) {
+          if ('args' in event && event.args) {
+            allEvents.push(event as ethers.EventLog);
+          }
+        }
+      } catch (error) {
+        console.log('[Monitor] No ERC1155 batch events or error querying:', (error as Error).message);
+      }
+
+      console.log(`[Monitor] Total: ${allEvents.length} mint event(s) to process`);
 
       // Process each mint event
-      for (const event of events) {
-        // Type guard: ensure event is EventLog (not just Log)
-        if ('args' in event && event.args) {
-          await this.processMintEvent(event);
-        } else {
-          console.warn('[Monitor] Skipping non-EventLog event');
-        }
+      for (const event of allEvents) {
+        await this.processMintEvent(event);
       }
 
       // Update last processed block
@@ -133,7 +196,7 @@ export class NFTMonitor {
   }
 
   /**
-   * Process a single mint event
+   * Process a single mint event (supports ERC721 and ERC1155)
    */
   private async processMintEvent(event: ethers.EventLog): Promise<void> {
     try {
@@ -143,25 +206,76 @@ export class NFTMonitor {
         return;
       }
 
-      const tokenId = args[2].toString(); // tokenId is the 3rd argument
-      const toAddress = args[1]; // to address is the 2nd argument
-
-      console.log(`[Monitor] Processing mint: Token ID ${tokenId} -> ${toAddress}`);
+      const eventName = event.eventName || event.fragment?.name;
 
       // Get block timestamp
       const block = await event.getBlock();
       const timestamp = new Date(block.timestamp * 1000);
 
-      const mintEvent: MintEvent = {
-        tokenId,
-        toAddress,
-        transactionHash: event.transactionHash,
-        blockNumber: event.blockNumber,
-        timestamp
-      };
+      if (eventName === 'Transfer') {
+        // ERC721: Transfer(address from, address to, uint256 tokenId)
+        const tokenId = args[2].toString();
+        const toAddress = args[1];
 
-      // Send notification
-      await this.notifier.sendNotification(mintEvent);
+        console.log(`[Monitor] Processing ERC721 mint: Token ID ${tokenId} -> ${toAddress}`);
+
+        const mintEvent: MintEvent = {
+          tokenId,
+          toAddress,
+          transactionHash: event.transactionHash,
+          blockNumber: event.blockNumber,
+          timestamp
+        };
+
+        await this.notifier.sendNotification(mintEvent);
+
+      } else if (eventName === 'TransferSingle') {
+        // ERC1155: TransferSingle(address operator, address from, address to, uint256 id, uint256 value)
+        const tokenId = args[3].toString();
+        const toAddress = args[2];
+        const amount = args[4].toString();
+
+        console.log(`[Monitor] Processing ERC1155 mint: Token ID ${tokenId} (×${amount}) -> ${toAddress}`);
+
+        const mintEvent: MintEvent = {
+          tokenId,
+          toAddress,
+          transactionHash: event.transactionHash,
+          blockNumber: event.blockNumber,
+          timestamp
+        };
+
+        await this.notifier.sendNotification(mintEvent);
+
+      } else if (eventName === 'TransferBatch') {
+        // ERC1155: TransferBatch(address operator, address from, address to, uint256[] ids, uint256[] values)
+        const tokenIds = args[3]; // array of token IDs
+        const toAddress = args[2];
+        const amounts = args[4]; // array of amounts
+
+        console.log(`[Monitor] Processing ERC1155 batch mint: ${tokenIds.length} tokens -> ${toAddress}`);
+
+        // Process each token in the batch
+        for (let i = 0; i < tokenIds.length; i++) {
+          const tokenId = tokenIds[i].toString();
+          const amount = amounts[i].toString();
+
+          console.log(`[Monitor]   Token ID ${tokenId} (×${amount})`);
+
+          const mintEvent: MintEvent = {
+            tokenId,
+            toAddress,
+            transactionHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            timestamp
+          };
+
+          await this.notifier.sendNotification(mintEvent);
+        }
+
+      } else {
+        console.warn(`[Monitor] Unknown event type: ${eventName}`);
+      }
 
     } catch (error) {
       console.error('[Monitor] Error processing mint event:', error);
