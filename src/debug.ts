@@ -97,32 +97,58 @@ async function debugMintEvent() {
       console.log(`Logs count: ${receipt.logs.length}`);
       console.log('');
 
+      // Show all logs first
+      console.log('=== All Transaction Logs ===');
+      for (let i = 0; i < receipt.logs.length; i++) {
+        const log = receipt.logs[i];
+        console.log(`\nLog #${i}:`);
+        console.log(`  Address: ${log.address}`);
+        console.log(`  Topics: ${log.topics.length} topic(s)`);
+        if (log.topics.length > 0) {
+          console.log(`    Topic[0] (Event Signature): ${log.topics[0]}`);
+        }
+        console.log(`  Is from our contract: ${log.address.toLowerCase() === contractAddress.toLowerCase()}`);
+      }
+
+      console.log('\n=== Parsing Transfer Events ===');
+      let foundTransfer = false;
+
       // Parse logs
       for (const log of receipt.logs) {
         try {
-          // Only parse logs from our contract
-          if (log.address.toLowerCase() === contractAddress.toLowerCase()) {
-            const parsed = contract.interface.parseLog({
-              topics: [...log.topics],
-              data: log.data
-            });
+          // Check all logs, not just from our contract
+          const parsed = contract.interface.parseLog({
+            topics: [...log.topics],
+            data: log.data
+          });
 
-            if (parsed && parsed.name === 'Transfer') {
-              console.log('Transfer Event Found:');
-              console.log(`  From: ${parsed.args[0]}`);
-              console.log(`  To: ${parsed.args[1]}`);
-              console.log(`  Token ID: ${parsed.args[2]?.toString()}`);
+          if (parsed && parsed.name === 'Transfer') {
+            foundTransfer = true;
+            console.log('\n✓ Transfer Event Found:');
+            console.log(`  Contract: ${log.address}`);
+            console.log(`  From: ${parsed.args[0]}`);
+            console.log(`  To: ${parsed.args[1]}`);
+            console.log(`  Token ID: ${parsed.args[2]?.toString()}`);
 
-              if (parsed.args[0] === ethers.ZeroAddress) {
-                console.log('  ✓ This is a MINT event (from = 0x0)');
-              } else {
-                console.log('  ✗ This is a TRANSFER event (not a mint)');
-              }
+            if (log.address.toLowerCase() !== contractAddress.toLowerCase()) {
+              console.log(`  ⚠ WARNING: Event is from ${log.address}, not from expected contract ${contractAddress}`);
+            }
+
+            if (parsed.args[0] === ethers.ZeroAddress) {
+              console.log('  ✓ This is a MINT event (from = 0x0)');
+            } else {
+              console.log('  ✗ This is a TRANSFER event (not a mint)');
+              console.log(`    From address: ${parsed.args[0]}`);
             }
           }
         } catch (e) {
-          // Skip logs that can't be parsed
+          // This log is not a Transfer event or can't be parsed
         }
+      }
+
+      if (!foundTransfer) {
+        console.log('\n✗ No Transfer events found in this transaction');
+        console.log('This might not be a mint/transfer transaction, or uses a different event signature.');
       }
     } catch (error) {
       console.error('Error fetching transaction:', error);
