@@ -29,43 +29,55 @@ async function debugMintEvent() {
   console.log(`Current block: ${currentBlock}`);
   console.log('');
 
-  // Query recent mint events (last 10000 blocks, ~5.5 hours on Polygon)
-  const fromBlock = currentBlock - 10000;
-  console.log(`Searching for mint events from block ${fromBlock} to ${currentBlock}...`);
+  // Skip broad search if specific tx/block is provided
+  const hasSpecificQuery = process.argv[2] === '--tx' || process.argv[2] === '--block';
 
-  const filter = contract.filters.Transfer(
-    ethers.ZeroAddress, // from = 0x0 (mints only)
-    null,               // to = any
-    null                // tokenId = any
-  );
+  if (!hasSpecificQuery) {
+    // Query recent mint events (last 1000 blocks, ~33 minutes on Polygon)
+    // Reduced from 10000 to avoid RPC limitations
+    const fromBlock = currentBlock - 1000;
+    console.log(`Searching for mint events from block ${fromBlock} to ${currentBlock}...`);
 
-  const events = await contract.queryFilter(filter, fromBlock, currentBlock);
+    const filter = contract.filters.Transfer(
+      ethers.ZeroAddress, // from = 0x0 (mints only)
+      null,               // to = any
+      null                // tokenId = any
+    );
 
-  console.log(`Found ${events.length} mint event(s)\n`);
+    try {
+      const events = await contract.queryFilter(filter, fromBlock, currentBlock);
 
-  if (events.length > 0) {
-    console.log('=== Mint Events ===');
-    for (const event of events) {
-      if ('args' in event && event.args) {
-        const tokenId = event.args[2]?.toString();
-        const toAddress = event.args[1];
-        const blockNumber = event.blockNumber;
-        const txHash = event.transactionHash;
+      console.log(`Found ${events.length} mint event(s)\n`);
 
-        console.log(`Token ID: ${tokenId}`);
-        console.log(`To: ${toAddress}`);
-        console.log(`Block: ${blockNumber}`);
-        console.log(`Tx Hash: ${txHash}`);
-        console.log(`PolygonScan: https://polygonscan.com/tx/${txHash}`);
-        console.log('---');
+      if (events.length > 0) {
+        console.log('=== Mint Events ===');
+        for (const event of events) {
+          if ('args' in event && event.args) {
+            const tokenId = event.args[2]?.toString();
+            const toAddress = event.args[1];
+            const blockNumber = event.blockNumber;
+            const txHash = event.transactionHash;
+
+            console.log(`Token ID: ${tokenId}`);
+            console.log(`To: ${toAddress}`);
+            console.log(`Block: ${blockNumber}`);
+            console.log(`Tx Hash: ${txHash}`);
+            console.log(`PolygonScan: https://polygonscan.com/tx/${txHash}`);
+            console.log('---');
+          }
+        }
+      } else {
+        console.log('No mint events found in the last 1000 blocks (~33 minutes).');
+        console.log('\nTroubleshooting:');
+        console.log('1. Verify the contract address is correct');
+        console.log('2. Check if the token was actually minted (not transferred)');
+        console.log('3. Try checking a specific transaction hash with --tx option');
       }
+    } catch (error: any) {
+      console.error('Error querying events:', error.message);
+      console.log('\nNote: Public RPC endpoints have block range limitations.');
+      console.log('Use --tx <hash> to check a specific transaction instead.');
     }
-  } else {
-    console.log('No mint events found in the last 10000 blocks.');
-    console.log('\nTroubleshooting:');
-    console.log('1. Verify the contract address is correct');
-    console.log('2. Check if the token was actually minted (not transferred)');
-    console.log('3. Try checking a specific transaction hash with --tx option');
   }
 
   // If a specific transaction is provided
