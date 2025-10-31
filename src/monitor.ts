@@ -31,7 +31,7 @@ export class NFTMonitor {
     contractAddress: string,
     notifier: Notifier,
     startBlock: number = 0,
-    pollInterval: number = 15000 // 15 seconds default
+    pollInterval: number = 1800000 // 30 minutes default (cost-optimized for AWS)
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.contractAddress = contractAddress;
@@ -54,6 +54,7 @@ export class NFTMonitor {
     console.log('[Monitor] Starting NFT mint monitor...');
     console.log(`[Monitor] Contract: ${this.contractAddress}`);
     console.log(`[Monitor] Starting from block: ${this.lastProcessedBlock || 'latest'}`);
+    console.log(`[Monitor] Polling interval: ${this.pollInterval / 1000} seconds (${this.pollInterval / 60000} minutes)`);
 
     // If no start block specified, get current block
     if (this.lastProcessedBlock === 0) {
