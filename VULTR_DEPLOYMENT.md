@@ -156,11 +156,23 @@ GitHub Actions の `Setup SSH key` ステップで次のような失敗が出る
 
 ### 7.3 鍵ペアの作成と登録手順（未作成の場合）
 
-ローカルPCで実行:
+ローカルPCで実行（**GitHub Actions用は必ずパスフレーズ空**で作成）:
+
+macOS / Linux:
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/id_ed25519_github_actions
+mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/id_ed25519_github_actions -N ""
 ```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f "$HOME\.ssh\id_ed25519_github_actions" -N ""
+```
+
+> `Saving key "~/.ssh/..." failed: No such file or directory` は、PowerShell で `~/.ssh` がそのまま解釈される／`.ssh` フォルダが未作成のときに発生します。`$HOME\.ssh` を使って先にフォルダを作成してください。
 
 公開鍵を Vultr サーバーへ登録:
 
