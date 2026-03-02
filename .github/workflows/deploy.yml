@@ -1,0 +1,55 @@
+name: Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required SSH secrets
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::error::Missing required secret: SSH_HOST"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_USER }}" ]; then
+            echo "::error::Missing required secret: SSH_USER"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing required secret: SSH_PRIVATE_KEY"
+            echo "::error::Go to Settings > Secrets and variables > Actions and register SSH_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Write .env file
+        run: |
+          cat << 'EOT' > .env
+          CONTRACT_ADDRESS=${{ secrets.CONTRACT_ADDRESS }}
+          POLYGON_RPC_URL=${{ secrets.POLYGON_RPC_URL }}
+          GAS_WEBHOOK_URL=${{ secrets.GAS_WEBHOOK_URL }}
+          START_BLOCK=${{ secrets.START_BLOCK }}
+          POLL_INTERVAL=${{ secrets.POLL_INTERVAL }}
+          EOT
+
+      - name: Deploy with Docker Compose
+        run: docker compose up --build -d
+        env:
+          DOCKER_HOST: ssh://${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          COMPOSE_PROJECT_NAME: mltg-mint-announce
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
