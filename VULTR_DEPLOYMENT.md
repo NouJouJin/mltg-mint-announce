@@ -192,7 +192,32 @@ ssh -i ~/.ssh/id_ed25519_github_actions <SSH_USER>@<SSH_HOST>
 
 この接続が成功してから Actions を再実行すると、失敗率を大幅に下げられます。
 
-### 7.5 それでも失敗する場合の確認リスト
+### 7.5 `SSH_PRIVATE_KEY format was not recognized` エラー
+
+秘密鍵のフォーマットが認識できないときに発生します。
+
+**よくある原因と対処:**
+
+| 原因 | エラーログのヒント | 対処 |
+|------|-------------------|------|
+| PuTTY形式 (.ppk) を登録した | `PuTTY format (.ppk) detected` | `puttygen key.ppk -O private-openssh -o id_ed25519` で変換 |
+| 公開鍵を登録した | `This looks like a PUBLIC key` | `cat ~/.ssh/id_ed25519`（`.pub` なし）の中身を登録 |
+| SSH2形式を登録した | `SSH2 format detected` | `ssh-keygen -i -f key_ssh2 > id_rsa` で変換 |
+| コピー時に改行が欠落した | `lines=1` と表示される | 鍵をテキストエディタで開き、改行を含む全文をコピーし直す |
+| 鍵の一部だけ貼り付けた | ヘッダー行が見つからない | `-----BEGIN ... -----` から `-----END ... -----` まで全文を貼り付ける |
+
+正しい秘密鍵は以下の形式です:
+
+```text
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5v...
+...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+> base64エンコードした秘密鍵（`cat id_ed25519 | base64 -w0`）も対応しています。
+
+### 7.6 それでも失敗する場合の確認リスト
 
 - `SSH_HOST` がIP/ホスト名として正しいか
 - `SSH_USER` が実在ユーザーか
@@ -200,7 +225,7 @@ ssh -i ~/.ssh/id_ed25519_github_actions <SSH_USER>@<SSH_HOST>
 - Firewall/UFW で SSH（通常22番）が閉じていないか
 - 鍵を再発行した場合、古い公開鍵が残っていないか
 
-### 7.6 Secret 名を変更したい場合
+### 7.7 Secret 名を変更したい場合
 
 ワークフロー側の参照名を Secret 名に合わせて変更します。
 

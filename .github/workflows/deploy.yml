@@ -39,24 +39,43 @@ jobs:
         run: |
           install -m 700 -d ~/.ssh
 
-          python - <<'PYKEY'
+          python3 - <<'PYKEY'
           import base64
           import os
+          import re
           from pathlib import Path
 
           raw = os.environ["SSH_PRIVATE_KEY"].strip()
           candidates = []
+
+          PEM_HEADERS = (
+              "BEGIN OPENSSH PRIVATE KEY",
+              "BEGIN RSA PRIVATE KEY",
+              "BEGIN EC PRIVATE KEY",
+              "BEGIN DSA PRIVATE KEY",
+              "BEGIN PRIVATE KEY",
+          )
+
+          def is_pem(value: str) -> bool:
+              return any(h in value for h in PEM_HEADERS)
 
           def add_candidate(value: str):
               value = value.strip()
               if value and value not in candidates:
                   candidates.append(value)
 
+          # 1) raw value as-is
           add_candidate(raw)
+          # 2) normalise line endings
           add_candidate(raw.replace("\r\n", "\n").replace("\r", "\n"))
+          # 3) literal backslash-n to real newline
           add_candidate(raw.replace("\\n", "\n"))
           add_candidate(raw.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n"))
+          # 4) spaces may have replaced newlines during copy-paste
+          add_candidate(re.sub(r"(?<=-----) | (?=-----)", "\n", raw))
+          add_candidate(raw.replace(" ", "\n"))
 
+          # 5) base64-encoded PEM
           compact = "".join(raw.split())
           try:
               decoded = base64.b64decode(compact, validate=True).decode("utf-8")
@@ -67,11 +86,48 @@ jobs:
 
           out = Path.home() / ".ssh" / "id_rsa"
           for candidate in candidates:
-              if "BEGIN OPENSSH PRIVATE KEY" in candidate or "BEGIN RSA PRIVATE KEY" in candidate or "BEGIN EC PRIVATE KEY" in candidate or "BEGIN PRIVATE KEY" in candidate:
+              if is_pem(candidate):
                   out.write_text(candidate.rstrip("\n") + "\n")
                   break
           else:
-              raise SystemExit("::error::SSH_PRIVATE_KEY format was not recognized. Use raw PEM/OpenSSH private key or base64 encoded PEM.")
+              # --- detailed diagnostics (no secret leakage) ---
+              hint = raw[:30] if len(raw) > 30 else raw
+              # mask middle of the hint to avoid leaking key material
+              if len(hint) > 10:
+                  hint = hint[:5] + "*" * (len(hint) - 10) + hint[-5:]
+
+              lines = raw.splitlines()
+              diag = (
+                  f"  length={len(raw)}, lines={len(lines)}, "
+                  f"first_chars(masked)=[{hint}]"
+              )
+
+              msgs = [
+                  "::error::SSH_PRIVATE_KEY format was not recognized.",
+                  f"::error::Diagnostics:{diag}",
+              ]
+              if raw.startswith("PuTTY-User-Key-File"):
+                  msgs.append(
+                      "::error::PuTTY format (.ppk) detected. Convert with: "
+                      "puttygen key.ppk -O private-openssh -o id_ed25519"
+                  )
+              elif raw.startswith("ssh-rsa ") or raw.startswith("ssh-ed25519 "):
+                  msgs.append(
+                      "::error::This looks like a PUBLIC key. "
+                      "Register the PRIVATE key instead (e.g. id_ed25519, not id_ed25519.pub)."
+                  )
+              elif raw.startswith("---- BEGIN SSH2"):
+                  msgs.append(
+                      "::error::SSH2 format detected. Convert with: "
+                      "ssh-keygen -i -f key_ssh2 > id_rsa"
+                  )
+              else:
+                  msgs.append(
+                      "::error::Expected PEM/OpenSSH private key starting with "
+                      "'-----BEGIN OPENSSH PRIVATE KEY-----' or '-----BEGIN RSA PRIVATE KEY-----'. "
+                      "Ensure the FULL key (including header/footer lines) is pasted into the Secret."
+                  )
+              raise SystemExit("\n".join(msgs))
           PYKEY
 
           chmod 600 ~/.ssh/id_rsa
