@@ -32,9 +32,21 @@ jobs:
           fi
 
       - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          eval "$(ssh-agent -s)"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | sed 's/\r$//' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if ! ssh-keygen -yf ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "::error::SSH_PRIVATE_KEY is invalid. Ensure the key is in PEM/OpenSSH format with line breaks preserved."
+            echo "::error::If you copied from Windows, remove CRLF and re-save the secret."
+            exit 1
+          fi
+
+          ssh-add ~/.ssh/deploy_key
 
       - name: Write .env file
         run: |
