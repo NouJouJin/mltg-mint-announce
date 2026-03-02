@@ -140,6 +140,23 @@ jobs:
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+          # Configure SSH to always use this key for the target host
+          cat >> ~/.ssh/config <<SSHCFG
+          Host $SSH_HOST
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          SSHCFG
+          chmod 600 ~/.ssh/config
+
+      - name: Verify SSH connectivity
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          echo "Testing SSH connection to $SSH_HOST..."
+          ssh -o BatchMode=yes -o ConnectTimeout=10 "$SSH_USER@$SSH_HOST" "echo 'SSH connection successful'; docker version --format '{{.Server.Version}}'"
+
       - name: Write .env file
         run: |
           cat << 'EOT' > .env
