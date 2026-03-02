@@ -1,0 +1,74 @@
+name: Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required SSH secrets
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::error::Missing required secret: SSH_HOST"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_USER }}" ]; then
+            echo "::error::Missing required secret: SSH_USER"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] && [ -z "${{ secrets.SSH_PRIVATE_KEY_B64 }}" ]; then
+            echo "::error::Missing SSH key secret. Set SSH_PRIVATE_KEY or SSH_PRIVATE_KEY_B64."
+            exit 1
+          fi
+
+      - name: Setup SSH key (supports plain or base64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          if [ -n "${{ secrets.SSH_PRIVATE_KEY_B64 }}" ]; then
+            printf '%s' '${{ secrets.SSH_PRIVATE_KEY_B64 }}' | base64 -d | tr -d '\r' > ~/.ssh/deploy_key
+          else
+            printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' | tr -d '\r' > ~/.ssh/deploy_key
+          fi
+
+          chmod 600 ~/.ssh/deploy_key
+
+          if ! ssh-keygen -yf ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "::error::Invalid SSH private key."
+            echo "::error::Use full key text in SSH_PRIVATE_KEY or base64 in SSH_PRIVATE_KEY_B64."
+            exit 1
+          fi
+
+          ssh-add ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Write .env file
+        run: |
+          cat << 'EOT' > .env
+          CONTRACT_ADDRESS=${{ secrets.CONTRACT_ADDRESS }}
+          POLYGON_RPC_URL=${{ secrets.POLYGON_RPC_URL }}
+          GAS_WEBHOOK_URL=${{ secrets.GAS_WEBHOOK_URL }}
+          START_BLOCK=${{ secrets.START_BLOCK }}
+          POLL_INTERVAL=${{ secrets.POLL_INTERVAL }}
+          EOT
+
+      - name: Deploy with Docker Compose
+        run: docker compose up --build -d
+        env:
+          DOCKER_HOST: ssh://${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          COMPOSE_PROJECT_NAME: mltg-mint-announce
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
