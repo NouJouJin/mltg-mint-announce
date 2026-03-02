@@ -32,9 +32,10 @@ jobs:
           fi
 
       - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: MrSquaare/ssh-setup-action@84ff9deaad2dbb1be99efe9080a849fe66139149 # v2.0.1
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Write .env file
         run: |
