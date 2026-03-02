@@ -1,6 +1,6 @@
 # NFT Mint Notification System
 
-NFTが新たにクレーム（Mint）された際にメール通知を送信するシステムです。
+NFTが新たにクレーム（Mint）された際にメール通知を送信するシステムです。T
 
 ## 対象NFT
 
