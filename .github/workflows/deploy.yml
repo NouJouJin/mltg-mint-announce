@@ -32,9 +32,57 @@ jobs:
           fi
 
       - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+
+          python - <<'PYKEY'
+          import base64
+          import os
+          from pathlib import Path
+
+          raw = os.environ["SSH_PRIVATE_KEY"].strip()
+          candidates = []
+
+          def add_candidate(value: str):
+              value = value.strip()
+              if value and value not in candidates:
+                  candidates.append(value)
+
+          add_candidate(raw)
+          add_candidate(raw.replace("\r\n", "\n").replace("\r", "\n"))
+          add_candidate(raw.replace("\\n", "\n"))
+          add_candidate(raw.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n"))
+
+          compact = "".join(raw.split())
+          try:
+              decoded = base64.b64decode(compact, validate=True).decode("utf-8")
+              add_candidate(decoded)
+              add_candidate(decoded.replace("\r\n", "\n").replace("\r", "\n"))
+          except Exception:
+              pass
+
+          out = Path.home() / ".ssh" / "id_rsa"
+          for candidate in candidates:
+              if "BEGIN OPENSSH PRIVATE KEY" in candidate or "BEGIN RSA PRIVATE KEY" in candidate or "BEGIN EC PRIVATE KEY" in candidate or "BEGIN PRIVATE KEY" in candidate:
+                  out.write_text(candidate.rstrip("\n") + "\n")
+                  break
+          else:
+              raise SystemExit("::error::SSH_PRIVATE_KEY format was not recognized. Use raw PEM/OpenSSH private key or base64 encoded PEM.")
+          PYKEY
+
+          chmod 600 ~/.ssh/id_rsa
+
+          if ! ssh-keygen -yf ~/.ssh/id_rsa > /dev/null 2>&1; then
+            echo "::error::SSH_PRIVATE_KEY could not be parsed. If stored on one line, replace literal \n with actual newlines or use base64-encoded PEM."
+            exit 1
+          fi
+
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Write .env file
         run: |
