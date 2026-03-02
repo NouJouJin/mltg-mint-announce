@@ -13,6 +13,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required SSH secrets
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::error::Missing required secret: SSH_HOST"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_USER }}" ]; then
+            echo "::error::Missing required secret: SSH_USER"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing required secret: SSH_PRIVATE_KEY"
+            echo "::error::Go to Settings > Secrets and variables > Actions and register SSH_PRIVATE_KEY."
+            exit 1
+          fi
+
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.9.0
         with:

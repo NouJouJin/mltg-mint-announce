@@ -124,3 +124,88 @@ docker compose -f /opt/apps/<repo>/compose.yaml logs -f --tail=100
 git pull
 docker compose up -d --build
 ```
+
+
+## 7. トラブルシューティング（`ssh-private-key is empty` エラー）
+
+GitHub Actions の `Setup SSH key` ステップで次のような失敗が出る場合：
+
+- `The ssh-private-key argument is empty`
+
+原因はほぼ確実に、**`SSH_PRIVATE_KEY` Secret が未登録・空文字・名前違い**です。
+
+### 7.1 まず確認すること（最優先）
+
+1. GitHub リポジトリの `Settings` → `Secrets and variables` → `Actions` を開く
+2. `Repository secrets` に **完全一致で `SSH_PRIVATE_KEY`** があるか確認
+3. 値が空でないか確認（貼り付けミスで空保存されていないか）
+
+> Secret 名は大文字小文字を区別します。`ssh_private_key` や `SSH-PRIVATE-KEY` は別名扱いです。
+
+### 7.2 正しい秘密鍵の形式
+
+`SSH_PRIVATE_KEY` には **秘密鍵そのもの全文**を入れます（改行を含む）。
+
+例（Ed25519）:
+
+```text
+-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+### 7.3 鍵ペアの作成と登録手順（未作成の場合）
+
+ローカルPCで実行:
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/id_ed25519_github_actions
+```
+
+公開鍵を Vultr サーバーへ登録:
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519_github_actions.pub <SSH_USER>@<SSH_HOST>
+```
+
+`ssh-copy-id` が使えない場合は手動追記:
+
+```bash
+cat ~/.ssh/id_ed25519_github_actions.pub
+# 出力をサーバーの ~/.ssh/authorized_keys に1行で追記
+```
+
+GitHub Secret に秘密鍵を登録:
+
+```bash
+cat ~/.ssh/id_ed25519_github_actions
+# 出力全文を SSH_PRIVATE_KEY に貼り付けて保存
+```
+
+### 7.4 登録後の接続確認
+
+ローカルPCで鍵指定して接続確認:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_github_actions <SSH_USER>@<SSH_HOST>
+```
+
+この接続が成功してから Actions を再実行すると、失敗率を大幅に下げられます。
+
+### 7.5 それでも失敗する場合の確認リスト
+
+- `SSH_HOST` がIP/ホスト名として正しいか
+- `SSH_USER` が実在ユーザーか
+- サーバー側 `~/.ssh` 権限が適切か（例: `700`）、`authorized_keys` が `600` か
+- Firewall/UFW で SSH（通常22番）が閉じていないか
+- 鍵を再発行した場合、古い公開鍵が残っていないか
+
+### 7.6 Secret 名を変更したい場合
+
+ワークフロー側の参照名を Secret 名に合わせて変更します。
+
+```yaml
+ssh-private-key: ${{ secrets.YOUR_SECRET_NAME }}
+```
+
+ただし、運用を簡単にするため、基本は `SSH_PRIVATE_KEY` に統一することを推奨します。
