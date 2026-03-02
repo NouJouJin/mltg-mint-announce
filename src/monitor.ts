@@ -31,7 +31,7 @@ export class NFTMonitor {
     contractAddress: string,
     notifier: Notifier,
     startBlock: number = 0,
-    pollInterval: number = 1800000 // 30 minutes default (cost-optimized for AWS)
+    pollInterval: number = 43200000 // 12時間
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.contractAddress = contractAddress;

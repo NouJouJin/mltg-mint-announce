@@ -67,7 +67,7 @@ nano .env
 # POLYGON_RPC_URL=https://polygon-rpc.com
 # GAS_WEBHOOK_URL=https://script.google.com/macros/s/YOUR-DEPLOYMENT-ID/exec
 # START_BLOCK=78000000  ← 監視開始ブロック（重要！）
-# POLL_INTERVAL=1800000  ← 30分間隔（デフォルト）
+# POLL_INTERVAL=43200000  ← 30分間隔（デフォルト）
 ```
 
 **重要**: `START_BLOCK`を設定しないと、現在のブロックから監視を開始するため、過去のミントを見逃します。
@@ -215,7 +215,7 @@ POLYGON_RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/YOUR-API-KEY
 POLL_INTERVAL=3600000
 
 # 30分間隔（推奨・デフォルト）
-POLL_INTERVAL=1800000
+POLL_INTERVAL=43200000
 
 # 15分間隔
 POLL_INTERVAL=900000
