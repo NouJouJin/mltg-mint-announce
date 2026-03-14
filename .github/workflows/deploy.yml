@@ -137,6 +137,12 @@ jobs:
             exit 1
           fi
 
+          echo "::group::SSH key info (public fingerprint)"
+          ssh-keygen -lf ~/.ssh/id_rsa
+          echo "Public key to register on server:"
+          ssh-keygen -yf ~/.ssh/id_rsa
+          echo "::endgroup::"
+
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
@@ -155,7 +161,14 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           echo "Testing SSH connection to $SSH_HOST..."
-          ssh -o BatchMode=yes -o ConnectTimeout=10 "$SSH_USER@$SSH_HOST" "echo 'SSH connection successful'; docker version --format '{{.Server.Version}}'"
+          if ! ssh -vvv -o BatchMode=yes -o ConnectTimeout=10 "$SSH_USER@$SSH_HOST" "echo 'SSH connection successful'; docker version --format '{{.Server.Version}}'" 2>&1; then
+            echo ""
+            echo "::error::SSH authentication failed."
+            echo "::error::The public key shown above must be added to the server's ~/.ssh/authorized_keys."
+            echo "::error::Run on the server: echo '<public-key>' >> ~/.ssh/authorized_keys"
+            echo "::error::You can find the public key in the 'SSH key info' group output above."
+            exit 1
+          fi
 
       - name: Write .env file
         run: |
