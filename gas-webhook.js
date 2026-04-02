@@ -189,7 +189,7 @@ function testNotification() {
     transactionHash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     blockNumber: 50000000,
     timestamp: new Date().toISOString(),
-    openseaUrl: 'https://opensea.io/assets/matic/0x30961b851a8a766014e53955694b3210718066e5/12345',
+    openseaUrl: 'https://opensea.io/assets/matic/0xE828376750FA25a27D67ba7F5e9908ED85F9738B/12345',
     polygonscanUrl: 'https://polygonscan.com/tx/0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
   };
 

@@ -32,7 +32,8 @@ function loadConfig(): Config {
     polygonRpcUrl,
     gasWebhookUrl,
     startBlock,
-    pollInterval
+    pollInterval,
+    monitorEndDate: new Date('2027-03-31T23:59:59Z')
   };
 }
 
@@ -42,7 +43,7 @@ function loadConfig(): Config {
 async function main() {
   console.log('='.repeat(60));
   console.log('NFT Mint Notification System');
-  console.log('MetaGriLabo Thanks Gift Farming 2025');
+  console.log('MetaGriLabo Thanks Gift Farming 2026-2027');
   console.log('='.repeat(60));
   console.log();
 
@@ -58,6 +59,12 @@ async function main() {
     console.log(`  Poll Interval: ${config.pollInterval}ms`);
     console.log();
 
+    // Check if monitoring period has ended
+    if (config.monitorEndDate && new Date() > config.monitorEndDate) {
+      console.log(`[Startup] Monitoring period ended (${config.monitorEndDate.toISOString().slice(0, 10)}). Exiting.`);
+      process.exit(0);
+    }
+
     // Initialize components
     const notifier = new Notifier(config.gasWebhookUrl, config.contractAddress);
     const monitor = new NFTMonitor(
@@ -65,7 +72,8 @@ async function main() {
       config.contractAddress,
       notifier,
       config.startBlock,
-      config.pollInterval
+      config.pollInterval,
+      config.monitorEndDate
     );
 
     // Test connections

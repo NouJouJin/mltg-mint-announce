@@ -25,13 +25,15 @@ export class NFTMonitor {
   private pollInterval: number;
   private lastProcessedBlock: number;
   private isRunning: boolean = false;
+  private monitorEndDate?: Date;
 
   constructor(
     rpcUrl: string,
     contractAddress: string,
     notifier: Notifier,
     startBlock: number = 0,
-    pollInterval: number = 43200000 // 12時間
+    pollInterval: number = 43200000, // 12時間
+    monitorEndDate?: Date
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     this.contractAddress = contractAddress;
@@ -39,6 +41,7 @@ export class NFTMonitor {
     this.notifier = notifier;
     this.lastProcessedBlock = startBlock;
     this.pollInterval = pollInterval;
+    this.monitorEndDate = monitorEndDate;
   }
 
   /**
@@ -55,6 +58,9 @@ export class NFTMonitor {
     console.log(`[Monitor] Contract: ${this.contractAddress}`);
     console.log(`[Monitor] Starting from block: ${this.lastProcessedBlock || 'latest'}`);
     console.log(`[Monitor] Polling interval: ${this.pollInterval / 1000} seconds (${this.pollInterval / 60000} minutes)`);
+    if (this.monitorEndDate) {
+      console.log(`[Monitor] Monitoring until: ${this.monitorEndDate.toISOString().slice(0, 10)}`);
+    }
 
     // If no start block specified, get current block
     if (this.lastProcessedBlock === 0) {
@@ -79,6 +85,13 @@ export class NFTMonitor {
    */
   private async poll(): Promise<void> {
     while (this.isRunning) {
+      // Check if monitoring period has ended
+      if (this.monitorEndDate && new Date() > this.monitorEndDate) {
+        console.log(`[Monitor] Monitoring period ended (${this.monitorEndDate.toISOString().slice(0, 10)}). Stopping.`);
+        this.isRunning = false;
+        break;
+      }
+
       try {
         await this.checkForNewMints();
       } catch (error) {
