@@ -18,6 +18,7 @@ export interface Config {
   gasWebhookUrl: string;
   startBlock?: number;
   pollInterval: number; // milliseconds
+  monitorEndDate?: Date; // Stop monitoring after this date
 }
 
 /**
