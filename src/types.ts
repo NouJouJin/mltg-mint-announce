@@ -18,6 +18,8 @@ export interface Config {
   gasWebhookUrl: string;
   startBlock?: number;
   pollInterval: number; // milliseconds
+  gasTimeoutMs: number; // webhook timeout in milliseconds
+  maxBlockRange: number; // max block span per eth_getLogs query
   monitorEndDate?: Date; // Stop monitoring after this date
 }
 

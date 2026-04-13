@@ -15,6 +15,8 @@ function loadConfig(): Config {
   const gasWebhookUrl = process.env.GAS_WEBHOOK_URL;
   const startBlock = process.env.START_BLOCK ? parseInt(process.env.START_BLOCK) : undefined;
   const pollInterval = process.env.POLL_INTERVAL ? parseInt(process.env.POLL_INTERVAL) : 15000;
+  const gasTimeoutMs = process.env.GAS_TIMEOUT_MS ? parseInt(process.env.GAS_TIMEOUT_MS) : 15000;
+  const maxBlockRange = process.env.MAX_BLOCK_RANGE ? parseInt(process.env.MAX_BLOCK_RANGE) : 1000;
 
   // Validate required variables
   if (!contractAddress) {
@@ -33,6 +35,8 @@ function loadConfig(): Config {
     gasWebhookUrl,
     startBlock,
     pollInterval,
+    gasTimeoutMs,
+    maxBlockRange,
     monitorEndDate: new Date('2027-03-31T23:59:59Z')
   };
 }
@@ -57,6 +61,8 @@ async function main() {
     console.log(`  GAS Webhook: ${config.gasWebhookUrl}`);
     console.log(`  Start Block: ${config.startBlock || 'latest'}`);
     console.log(`  Poll Interval: ${config.pollInterval}ms`);
+    console.log(`  GAS Timeout: ${config.gasTimeoutMs}ms`);
+    console.log(`  Max Block Range: ${config.maxBlockRange}`);
     console.log();
 
     // Check if monitoring period has ended
@@ -66,13 +72,14 @@ async function main() {
     }
 
     // Initialize components
-    const notifier = new Notifier(config.gasWebhookUrl, config.contractAddress);
+    const notifier = new Notifier(config.gasWebhookUrl, config.contractAddress, config.gasTimeoutMs);
     const monitor = new NFTMonitor(
       config.polygonRpcUrl,
       config.contractAddress,
       notifier,
       config.startBlock,
       config.pollInterval,
+      config.maxBlockRange,
       config.monitorEndDate
     );
 
