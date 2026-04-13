@@ -6,10 +6,10 @@ NFT が新たにクレーム（Mint）された際に通知を送信するシス
 ## 対象 NFT
 
 - **コレクション**: MetaGriLabo Thanks Gift Farming 2026-2027（現行実装）
-- **コントラクトアドレス**: `0x30961b851a8a766014e53955694b3210718066e5`
+- **コントラクトアドレス**: `0xE828376750FA25a27D67ba7F5e9908ED85F9738B`
 - **ネットワーク**: Polygon (Matic)
 - **OpenSea**: https://opensea.io/collection/metagrilabo-thanks-gift-farming-2025
-- **PolygonScan**: https://polygonscan.com/address/0x30961b851a8a766014e53955694b3210718066e5
+- **PolygonScan**: https://polygonscan.com/address/0xE828376750FA25a27D67ba7F5e9908ED85F9738B
 
 ## システム概要
 
