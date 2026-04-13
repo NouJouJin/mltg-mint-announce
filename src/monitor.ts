@@ -25,6 +25,7 @@ export class NFTMonitor {
   private pollInterval: number;
   private lastProcessedBlock: number;
   private isRunning: boolean = false;
+  private maxBlockRange: number;
   private monitorEndDate?: Date;
 
   constructor(
@@ -33,6 +34,7 @@ export class NFTMonitor {
     notifier: Notifier,
     startBlock: number = 0,
     pollInterval: number = 43200000, // 12時間
+    maxBlockRange: number = 1000,
     monitorEndDate?: Date
   ) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -41,6 +43,7 @@ export class NFTMonitor {
     this.notifier = notifier;
     this.lastProcessedBlock = startBlock;
     this.pollInterval = pollInterval;
+    this.maxBlockRange = Math.max(1, maxBlockRange);
     this.monitorEndDate = monitorEndDate;
   }
 
@@ -58,6 +61,7 @@ export class NFTMonitor {
     console.log(`[Monitor] Contract: ${this.contractAddress}`);
     console.log(`[Monitor] Starting from block: ${this.lastProcessedBlock || 'latest'}`);
     console.log(`[Monitor] Polling interval: ${this.pollInterval / 1000} seconds (${this.pollInterval / 60000} minutes)`);
+    console.log(`[Monitor] Max block range/query: ${this.maxBlockRange}`);
     if (this.monitorEndDate) {
       console.log(`[Monitor] Monitoring until: ${this.monitorEndDate.toISOString().slice(0, 10)}`);
     }
@@ -115,82 +119,56 @@ export class NFTMonitor {
         return;
       }
 
-      console.log(`[Monitor] Checking blocks ${this.lastProcessedBlock + 1} to ${currentBlock}`);
-
-      // Query both ERC721 and ERC1155 mint events
       const allEvents: ethers.EventLog[] = [];
+      const fromBlock = this.lastProcessedBlock + 1;
+      console.log(`[Monitor] Checking blocks ${fromBlock} to ${currentBlock}`);
 
-      // ERC721 Transfer events (from = 0x0)
-      try {
+      for (let rangeStart = fromBlock; rangeStart <= currentBlock; rangeStart += this.maxBlockRange) {
+        const rangeEnd = Math.min(rangeStart + this.maxBlockRange - 1, currentBlock);
+        console.log(`[Monitor] Querying block range ${rangeStart}-${rangeEnd}`);
+
+        // ERC721 Transfer events (from = 0x0)
         const erc721Filter = this.contract.filters.Transfer(
-          ethers.ZeroAddress, // from address = 0x0 (mint only)
-          null, // to address = any
-          null  // tokenId = any
+          ethers.ZeroAddress,
+          null,
+          null
         );
-        const erc721Events = await this.contract.queryFilter(
-          erc721Filter,
-          this.lastProcessedBlock + 1,
-          currentBlock
-        );
-        console.log(`[Monitor] Found ${erc721Events.length} ERC721 mint event(s)`);
-
+        const erc721Events = await this.queryFilterWithRetry(erc721Filter, rangeStart, rangeEnd, 'ERC721');
         for (const event of erc721Events) {
           if ('args' in event && event.args) {
             allEvents.push(event as ethers.EventLog);
           }
         }
-      } catch (error) {
-        console.log('[Monitor] No ERC721 events or error querying:', (error as Error).message);
-      }
 
-      // ERC1155 TransferSingle events (from = 0x0)
-      try {
+        // ERC1155 TransferSingle events (from = 0x0)
         const erc1155SingleFilter = this.contract.filters.TransferSingle(
-          null, // operator = any
-          ethers.ZeroAddress, // from = 0x0 (mint only)
-          null, // to = any
-          null, // id = any
-          null  // value = any
+          null,
+          ethers.ZeroAddress,
+          null,
+          null,
+          null
         );
-        const erc1155SingleEvents = await this.contract.queryFilter(
-          erc1155SingleFilter,
-          this.lastProcessedBlock + 1,
-          currentBlock
-        );
-        console.log(`[Monitor] Found ${erc1155SingleEvents.length} ERC1155 TransferSingle mint event(s)`);
-
+        const erc1155SingleEvents = await this.queryFilterWithRetry(erc1155SingleFilter, rangeStart, rangeEnd, 'ERC1155 TransferSingle');
         for (const event of erc1155SingleEvents) {
           if ('args' in event && event.args) {
             allEvents.push(event as ethers.EventLog);
           }
         }
-      } catch (error) {
-        console.log('[Monitor] No ERC1155 events or error querying:', (error as Error).message);
-      }
 
-      // ERC1155 TransferBatch events (from = 0x0)
-      try {
+        // ERC1155 TransferBatch events (from = 0x0)
         const erc1155BatchFilter = this.contract.filters.TransferBatch(
-          null, // operator = any
-          ethers.ZeroAddress, // from = 0x0 (mint only)
-          null, // to = any
-          null, // ids = any
-          null  // values = any
+          null,
+          ethers.ZeroAddress,
+          null,
+          null,
+          null
         );
-        const erc1155BatchEvents = await this.contract.queryFilter(
-          erc1155BatchFilter,
-          this.lastProcessedBlock + 1,
-          currentBlock
-        );
-        console.log(`[Monitor] Found ${erc1155BatchEvents.length} ERC1155 TransferBatch mint event(s)`);
-
+        const erc1155BatchEvents = await this.queryFilterWithRetry(erc1155BatchFilter, rangeStart, rangeEnd, 'ERC1155 TransferBatch');
         for (const event of erc1155BatchEvents) {
           if ('args' in event && event.args) {
             allEvents.push(event as ethers.EventLog);
           }
         }
-      } catch (error) {
-        console.log('[Monitor] No ERC1155 batch events or error querying:', (error as Error).message);
       }
 
       console.log(`[Monitor] Total: ${allEvents.length} mint event(s) to process`);
@@ -207,6 +185,33 @@ export class NFTMonitor {
       console.error('[Monitor] Error checking for mints:', error);
       throw error;
     }
+  }
+
+  private async queryFilterWithRetry(
+    filter: ethers.DeferredTopicFilter,
+    fromBlock: number,
+    toBlock: number,
+    label: string
+  ): Promise<Array<ethers.Log | ethers.EventLog>> {
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const events = await this.contract.queryFilter(filter, fromBlock, toBlock);
+        console.log(`[Monitor] Found ${events.length} ${label} mint event(s) in ${fromBlock}-${toBlock}`);
+        return events;
+      } catch (error) {
+        const message = (error as Error).message;
+        console.warn(`[Monitor] ${label} query failed (attempt ${attempt}/${maxAttempts}) in ${fromBlock}-${toBlock}: ${message}`);
+
+        if (attempt < maxAttempts) {
+          await this.sleep(1000 * attempt);
+          continue;
+        }
+      }
+    }
+
+    return [];
   }
 
   /**

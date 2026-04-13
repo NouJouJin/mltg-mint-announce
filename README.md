@@ -1,14 +1,15 @@
 # NFT Mint Notification System
 
 NFT が新たにクレーム（Mint）された際に通知を送信するシステムです。
+（現行実装は `MetaGriLabo Thanks Gift Farming 2026-2027` 向け設定を含みます）
 
 ## 対象 NFT
 
-- **コレクション**: MetaGriLabo Thanks Gift Farming 2025
-- **コントラクトアドレス**: `0x30961b851a8a766014e53955694b3210718066e5`
+- **コレクション**: MetaGriLabo Thanks Gift Farming 2026-2027（現行実装）
+- **コントラクトアドレス**: `0xE828376750FA25a27D67ba7F5e9908ED85F9738B`
 - **ネットワーク**: Polygon (Matic)
 - **OpenSea**: https://opensea.io/collection/metagrilabo-thanks-gift-farming-2025
-- **PolygonScan**: https://polygonscan.com/address/0x30961b851a8a766014e53955694b3210718066e5
+- **PolygonScan**: https://polygonscan.com/address/0xE828376750FA25a27D67ba7F5e9908ED85F9738B
 
 ## システム概要
 
@@ -92,6 +93,8 @@ cat $HOME\.ssh\github_actions_key
 | `GAS_WEBHOOK_URL` | GAS Web アプリの URL | 必須 |
 | `START_BLOCK` | 監視開始ブロック番号 | 任意 |
 | `POLL_INTERVAL` | ポーリング間隔（ミリ秒） | 任意 |
+| `GAS_TIMEOUT_MS` | GAS Webhook のタイムアウト（ミリ秒） | 任意 |
+| `MAX_BLOCK_RANGE` | 1回の `eth_getLogs` で照会する最大ブロック範囲 | 任意 |
 
 ### 3. デプロイの実行
 
@@ -158,15 +161,41 @@ START_BLOCK=50000000
 
 ### POLL_INTERVAL
 
-ポーリング間隔（ミリ秒）。デフォルトは 30 分（43200000ms）。
+ポーリング間隔（ミリ秒）。**現行実装のデフォルトは 15 秒（15000ms）** です。
 
 ```bash
-POLL_INTERVAL=43200000  # 30分（デフォルト）
+POLL_INTERVAL=15000     # 15秒（デフォルト）
+POLL_INTERVAL=43200000  # 12時間
 POLL_INTERVAL=3600000   # 1時間
 POLL_INTERVAL=300000    # 5分
 ```
 
 > ポーリング間隔を短くすると RPC 呼び出しが増え、レート制限に引っかかる可能性があります。
+
+### 監視終了日（実装固定）
+
+現行実装では、監視終了日が `2027-03-31` に固定されています（コード側の `monitorEndDate`）。
+この日付を過ぎるとプロセスは起動時またはポーリング中に自動停止します。
+
+### GAS_TIMEOUT_MS
+
+GAS 接続テストおよび通知送信に使う HTTP タイムアウト（ミリ秒）。デフォルトは `15000` です。
+
+```bash
+GAS_TIMEOUT_MS=15000
+GAS_TIMEOUT_MS=30000
+```
+
+### MAX_BLOCK_RANGE
+
+`eth_getLogs` を実行する際の 1 リクエストあたり最大ブロック範囲です。  
+RPC によっては範囲が大きいと `invalid block range params` や `request timed out` が発生するため、デフォルト `1000` で分割照会します。
+
+```bash
+MAX_BLOCK_RANGE=1000   # デフォルト
+MAX_BLOCK_RANGE=500    # より保守的
+MAX_BLOCK_RANGE=2000   # RPC が安定している場合
+```
 
 ### Polygon RPC エンドポイント
 
@@ -197,7 +226,7 @@ function doPost(e) {
 
     const subject = `新しいNFTがクレームされました - Token ID: ${data.tokenId}`;
     const body = `
-MetaGriLabo Thanks Gift Farming 2025 NFTが新たにクレームされました。
+MetaGriLabo Thanks Gift Farming 2026-2027 NFTが新たにクレームされました。
 
 詳細情報:
 - Token ID: ${data.tokenId}

@@ -7,10 +7,12 @@ import { MintEvent, NotificationPayload } from './types';
 export class Notifier {
   private gasWebhookUrl: string;
   private contractAddress: string;
+  private timeoutMs: number;
 
-  constructor(gasWebhookUrl: string, contractAddress: string) {
+  constructor(gasWebhookUrl: string, contractAddress: string, timeoutMs: number = 15000) {
     this.gasWebhookUrl = gasWebhookUrl;
     this.contractAddress = contractAddress;
+    this.timeoutMs = timeoutMs;
   }
 
   /**
@@ -34,7 +36,7 @@ export class Notifier {
         headers: {
           'Content-Type': 'application/json'
         },
-        timeout: 10000 // 10 seconds timeout
+        timeout: this.timeoutMs
       });
 
       if (response.status === 200) {
@@ -68,7 +70,7 @@ export class Notifier {
       };
 
       const response = await axios.post(this.gasWebhookUrl, testPayload, {
-        timeout: 5000
+        timeout: this.timeoutMs
       });
 
       console.log('[Notifier] Connection test successful');
